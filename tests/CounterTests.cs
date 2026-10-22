@@ -7,40 +7,38 @@ namespace flaui_demo.Tests;
 
 public class CounterTests
 {
-    private Application _app = null!;
-    private UIA3Automation _automation = null!;
-    private Window _window = null!;
+    Application app = null!;
+    UIA3Automation automation = null!;
+    Window window = null!;
 
     [OneTimeSetUp]
     public void SetUp()
     {
-        _app = Application.Launch(Path.Combine(AppContext.BaseDirectory, "flaui-demo.exe"));
-        _automation = new UIA3Automation();
-        _window = _app.GetMainWindow(_automation)!;
+        app = Application.Launch(Path.Combine(AppContext.BaseDirectory, "flaui-demo.exe"));
+        automation = new UIA3Automation();
+        window = app.GetMainWindow(automation)!;
     }
 
     [OneTimeTearDown]
     public void TearDown()
     {
-        _automation.Dispose();
-        _app.Close();
+        automation.Dispose();
+        app.Close();
     }
 
     [Test]
-    public void PlusButton_IncrementsCounter()
+    public void Increment_DisplaysOne()
     {
-        _window.FindFirstDescendant(condition => condition.ByAutomationId("Button_Plus"))?.AsButton().Invoke();
+        window.GetByTestId("Increment").Click();
 
-        var count = _window.FindFirstDescendant(condition => condition.ByAutomationId("Count"))?.AsLabel().Text;
-        Assert.That(count, Is.EqualTo("1"));
+        Assert.That(window.GetByTestId("Count").Text(), Is.EqualTo("1"));
     }
 
     [Test]
-    public void MinusButton_DoesNotDecrementBelowZero()
+    public void Decrement_DisplaysZero()
     {
-        _window.FindFirstDescendant(condition => condition.ByAutomationId("Button_Minus"))?.AsButton().Invoke();
+        window.GetByTestId("Decrement").Click();
 
-        var count = _window.FindFirstDescendant(condition => condition.ByAutomationId("Count"))?.AsLabel().Text;
-        Assert.That(count, Is.EqualTo("0"));
+        Assert.That(window.GetByTestId("Count").Text(), Is.EqualTo("0"));
     }
 }

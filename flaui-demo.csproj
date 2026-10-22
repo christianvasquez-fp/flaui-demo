@@ -15,4 +15,8 @@
     <Watch Include="**\*.xaml" />
   </ItemGroup>
 
+  <Target Name="RunTests" AfterTargets="VSTest">
+    <MSBuild Projects="tests\flaui-demo.Tests.csproj" Targets="Restore;VSTest" />
+  </Target>
+
 </Project>

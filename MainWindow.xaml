@@ -20,12 +20,12 @@
                                    Margin="0,0,0,12"/>
                         <StackPanel Orientation="Horizontal"
                                     HorizontalAlignment="Center">
-                                <Button x:Name="Button_Minus"
+                                <Button x:Name="Decrement"
                                         Content="-"
                                         Width="40"
                                         Height="40"
                                         FontSize="20"
-                                        Click="OnMinusClick"/>
+                                        Click="OnDecrement"/>
                                 <Label x:Name="Count"
                                        Content="0"
                                        FontSize="24"
@@ -33,12 +33,12 @@
                                        HorizontalContentAlignment="Center"
                                        Margin="16,0"
                                        MinWidth="40"/>
-                                <Button x:Name="Button_Plus"
+                                <Button x:Name="Increment"
                                         Content="+"
                                         Width="40"
                                         Height="40"
                                         FontSize="20"
-                                        Click="OnPlusClick"/>
+                                        Click="OnIncrement"/>
                         </StackPanel>
                 </StackPanel>
         </Grid>
