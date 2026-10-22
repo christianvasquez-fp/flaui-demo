@@ -23,7 +23,7 @@ public partial class MainWindow : Window
         InitializeComponent();
     }
 
-    private void MinusButton_Click(object sender, RoutedEventArgs e)
+    private void OnMinusClick(object sender, RoutedEventArgs e)
     {
         if (_count > 0)
         {
@@ -32,7 +32,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void PlusButton_Click(object sender, RoutedEventArgs e)
+    private void OnPlusClick(object sender, RoutedEventArgs e)
     {
         _count++;
         CounterLabel.Content = _count.ToString();

@@ -5,30 +5,41 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:flaui_demo"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
-        <StackPanel Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center">
-            <Button x:Name="MinusButton"
-                    Content="-"
-                    Width="40"
-                    Height="40"
-                    FontSize="20"
-                    Click="MinusButton_Click" />
-            <Label x:Name="CounterLabel"
-                   Content="0"
-                   FontSize="24"
-                   VerticalContentAlignment="Center"
-                   HorizontalContentAlignment="Center"
-                   Margin="16,0"
-                   MinWidth="40" />
-            <Button x:Name="PlusButton"
-                    Content="+"
-                    Width="40"
-                    Height="40"
-                    FontSize="20"
-                    Click="PlusButton_Click" />
-        </StackPanel>
-    </Grid>
+        Title="Counter"
+        Height="300"
+        Width="300">
+        <Grid>
+                <StackPanel Orientation="Vertical"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                        <TextBlock x:Name="HeadingText"
+                                   Text="Counter"
+                                   FontSize="28"
+                                   FontWeight="Bold"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,12"/>
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Center">
+                                <Button x:Name="MinusButton"
+                                        Content="-"
+                                        Width="40"
+                                        Height="40"
+                                        FontSize="20"
+                                        Click="OnMinusClick"/>
+                                <Label x:Name="CounterLabel"
+                                       Content="0"
+                                       FontSize="24"
+                                       VerticalContentAlignment="Center"
+                                       HorizontalContentAlignment="Center"
+                                       Margin="16,0"
+                                       MinWidth="40"/>
+                                <Button x:Name="PlusButton"
+                                        Content="+"
+                                        Width="40"
+                                        Height="40"
+                                        FontSize="20"
+                                        Click="OnPlusClick"/>
+                        </StackPanel>
+                </StackPanel>
+        </Grid>
 </Window>
