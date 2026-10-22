@@ -32,9 +32,9 @@ flaui-demo/
 ### Counter App (`MainWindow`)
 A simple WPF window with:
 - `Heading` (`TextBlock`): title text.
-- `Button_Minus` (`Button`): decrements the counter, floored at `0`.
+- `Decrement` (`Button`): decrements the counter, floored at `0`.
 - `Count` (`Label`): displays the current count (`0` initially).
-- `Button_Plus` (`Button`): increments the counter by `1`.
+- `Increment` (`Button`): increments the counter by `1`.
 
 Each control sets `x:Name`, which WPF exposes as the UI Automation `AutomationId`.
 
@@ -45,7 +45,7 @@ Raw UI Automation tests are often flaky or verbose because elements render async
    - Placed in `FlaUI.Core.AutomationElements` with `#nullable enable` and explicit `using` directives so copying the file into any FlaUI test project immediately lights up IntelliSense on `Window` and `AutomationElement` without extra imports.
 
 2. **Lazy, Chainable Locators (`GetByTestId`, `GetByText`, `GetByRole`, `FindElement`)**
-   - Calling `window.GetByTestId("Button_Plus")` or chaining `parent.GetByRole(ControlType.Button, "+")` does not touch the UI tree. Resolution is deferred until an action or assertion executes, so chained locators never go stale if a parent container re-renders.
+   - Calling `window.GetByTestId("Increment")` or chaining `parent.GetByRole(ControlType.Button, "+")` does not touch the UI tree. Resolution is deferred until an action or query executes, so chained locators never go stale if a parent container re-renders.
 
 3. **Playwright Auto-Waiting & Backoff Polling**
    - **Actions** (`Click`, `Fill`, `Check`, `SelectOption`, `Press`, `Type`) poll with Playwright's backoff schedule (`[20, 50, 100, 100, 500, ...]` ms up to `30s` default) and verify actionability inside the retry loop:
@@ -53,8 +53,7 @@ Raw UI Automation tests are often flaky or verbose because elements render async
      - **Visible**: not offscreen and has a non-zero bounding box.
      - **Stable**: bounding rectangle is unchanged across consecutive checks (`Click`, `Check`, `SelectOption`).
      - **Enabled & Editable**: `IsEnabled` (and not `IsReadOnly` for `Fill`/`Clear`).
-   - **State Queries** (`IsVisible`, `IsHidden`) return immediately (`0ms` wait), while `Text()` / `TextContent()`, `InputValue()`, `IsEnabled()`, and `IsChecked()` wait for attachment and read once.
-   - **Auto-Retrying Assertions** (`locator.Expect().ToHaveText(...)`, `ToBeVisible()`, `.Not`) poll with `[100, 250, 500, 1000, ...]` ms for up to `5s`.
+   - **State Queries** (`IsVisible`, `IsHidden`) return immediately (`0ms` wait), while `Text()` / `TextContent()`, `InputValue()`, `IsEnabled()`, and `IsChecked()` wait for attachment and read once, pairing cleanly with `NUnit.StaticExpect` (`Expect(window.GetByTestId("Count").Text(), EqualTo("1"))`).
 
 4. **Pattern-First Interaction with Mouse/Control Fallbacks**
    - `Click()` prefers UIA patterns (`Invoke`, `Toggle`, `SelectionItem`) for fast, deterministic execution even when another window is in the foreground, falling back to physical mouse clicks (`forceMouse: true` or when no pattern applies).

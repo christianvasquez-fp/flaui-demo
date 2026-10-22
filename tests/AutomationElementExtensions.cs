@@ -71,12 +71,6 @@ public static class AutomationElementExtensions
                 ? cf.ByControlType(role)
                 : cf.ByControlType(role).And(cf.ByName(name)),
             name is null ? $"Role={role}" : $"Role={role}, Name='{name}'");
-
-    /// <summary>
-    /// Creates an auto-retrying assertion builder for the locator (5s default timeout).
-    /// Can be called as <c>locator.Expect()</c> or <c>Expect(locator)</c> with <c>using static FlaUI.Core.AutomationElements.AutomationElementExtensions;</c>.
-    /// </summary>
-    public static LocatorAssertions Expect(this Locator locator) => new(locator);
 }
 
 /// <summary>
@@ -85,7 +79,6 @@ public static class AutomationElementExtensions
 public sealed class Locator
 {
     private static readonly int[] ActionBackoffMs = [20, 50, 100, 100, 500];
-    internal static readonly int[] ExpectBackoffMs = [100, 250, 500, 1000];
 
     /// <summary>
     /// Default timeout for locator actions and queries (30 seconds).
@@ -397,13 +390,11 @@ public sealed class Locator
 
     /// <summary>
     /// Returns <c>true</c> immediately if the element is currently attached and visible (does not wait).
-    /// Use <c>Expect(locator).ToBeVisible()</c> to wait for visibility.
     /// </summary>
     public bool IsVisible() => IsElementVisible(TryResolve());
 
     /// <summary>
     /// Returns <c>true</c> immediately if the element is absent or hidden (does not wait).
-    /// Use <c>Expect(locator).ToBeHidden()</c> to wait for the element to hide.
     /// </summary>
     public bool IsHidden() => !IsVisible();
 
@@ -618,204 +609,5 @@ public sealed class Locator
                 Thread.Sleep(sleepTime);
             }
         }
-    }
-}
-
-/// <summary>
-/// Auto-retrying assertions for a <see cref="Locator"/> (polls up to <see cref="DefaultTimeout"/> with backoff).
-/// </summary>
-public sealed class LocatorAssertions
-{
-    /// <summary>
-    /// Default timeout for assertions (5 seconds).
-    /// </summary>
-    public static TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromSeconds(5);
-
-    private readonly Locator _locator;
-    private readonly bool _isNot;
-
-    /// <summary>
-    /// Initializes assertions for <paramref name="locator"/>.
-    /// </summary>
-    public LocatorAssertions(Locator locator, bool isNot = false)
-    {
-        _locator = locator;
-        _isNot = isNot;
-    }
-
-    /// <summary>
-    /// Negates the assertion (e.g. <c>Expect(locator).Not.ToBeVisible()</c>).
-    /// </summary>
-    public LocatorAssertions Not => new(_locator, !_isNot);
-
-    /// <summary>
-    /// Asserts that the element is attached and visible within the timeout.
-    /// </summary>
-    public void ToBeVisible(TimeSpan? timeout = null) =>
-        PollAssertion(
-            () =>
-            {
-                var visible = _locator.IsVisible();
-                return (visible, visible ? "visible" : "hidden");
-            },
-            expectedDescription: "to be visible",
-            timeout);
-
-    /// <summary>
-    /// Asserts that the element is absent or hidden within the timeout.
-    /// </summary>
-    public void ToBeHidden(TimeSpan? timeout = null) =>
-        PollAssertion(
-            () =>
-            {
-                var hidden = _locator.IsHidden();
-                return (hidden, hidden ? "hidden" : "visible");
-            },
-            expectedDescription: "to be hidden",
-            timeout);
-
-    /// <summary>
-    /// Asserts that the element is attached and enabled within the timeout.
-    /// </summary>
-    public void ToBeEnabled(TimeSpan? timeout = null) =>
-        PollAssertion(
-            () =>
-            {
-                var element = _locator.TryResolve();
-                if (element is null)
-                {
-                    return (null, "element not found");
-                }
-
-                var enabled = element.Properties.IsEnabled.ValueOrDefault;
-                return (enabled, enabled ? "enabled" : "disabled");
-            },
-            expectedDescription: "to be enabled",
-            timeout);
-
-    /// <summary>
-    /// Asserts that the element is attached and disabled within the timeout.
-    /// </summary>
-    public void ToBeDisabled(TimeSpan? timeout = null) =>
-        PollAssertion(
-            () =>
-            {
-                var element = _locator.TryResolve();
-                if (element is null)
-                {
-                    return (null, "element not found");
-                }
-
-                var disabled = !element.Properties.IsEnabled.ValueOrDefault;
-                return (disabled, disabled ? "disabled" : "enabled");
-            },
-            expectedDescription: "to be disabled",
-            timeout);
-
-    /// <summary>
-    /// Asserts that the checkbox or radio button is checked within the timeout.
-    /// </summary>
-    public void ToBeChecked(TimeSpan? timeout = null) =>
-        PollAssertion(
-            () =>
-            {
-                var element = _locator.TryResolve();
-                if (element is null)
-                {
-                    return (null, "element not found");
-                }
-
-                var isChecked = Locator.ReadIsChecked(element, _locator.Description);
-                return (isChecked, isChecked ? "checked" : "unchecked");
-            },
-            expectedDescription: "to be checked",
-            timeout);
-
-    /// <summary>
-    /// Asserts that the element's text exactly equals <paramref name="expected"/> within the timeout.
-    /// </summary>
-    public void ToHaveText(string expected, TimeSpan? timeout = null) =>
-        PollAssertion(
-            () =>
-            {
-                var element = _locator.TryResolve();
-                if (element is null)
-                {
-                    return (null, "element not found");
-                }
-
-                var actual = Locator.ReadTextContent(element);
-                return (string.Equals(actual, expected, StringComparison.Ordinal), $"'{actual}'");
-            },
-            expectedDescription: $"to have text '{expected}'",
-            timeout);
-
-    /// <summary>
-    /// Asserts that the element's text contains <paramref name="expected"/> within the timeout.
-    /// </summary>
-    public void ToContainText(string expected, TimeSpan? timeout = null) =>
-        PollAssertion(
-            () =>
-            {
-                var element = _locator.TryResolve();
-                if (element is null)
-                {
-                    return (null, "element not found");
-                }
-
-                var actual = Locator.ReadTextContent(element);
-                return (actual.Contains(expected, StringComparison.Ordinal), $"'{actual}'");
-            },
-            expectedDescription: $"to contain text '{expected}'",
-            timeout);
-
-    /// <summary>
-    /// Asserts that the input element's value equals <paramref name="expected"/> within the timeout.
-    /// </summary>
-    public void ToHaveValue(string expected, TimeSpan? timeout = null) =>
-        PollAssertion(
-            () =>
-            {
-                var element = _locator.TryResolve();
-                if (element is null)
-                {
-                    return (null, "element not found");
-                }
-
-                var actual = Locator.ReadInputValue(element);
-                return (string.Equals(actual, expected, StringComparison.Ordinal), $"'{actual}'");
-            },
-            expectedDescription: $"to have value '{expected}'",
-            timeout);
-
-    private void PollAssertion(
-        Func<(bool? Matched, string Actual)> check,
-        string expectedDescription,
-        TimeSpan? timeout)
-    {
-        var effectiveTimeout = timeout ?? DefaultTimeout;
-        Locator.PollWithBackoff<bool>(
-            () =>
-            {
-                try
-                {
-                    var (matched, actual) = check();
-                    if (matched is null)
-                    {
-                        return (false, false, actual);
-                    }
-
-                    var passed = _isNot ? !matched.Value : matched.Value;
-                    return (passed, passed, actual);
-                }
-                catch (Exception ex)
-                {
-                    return (false, false, ex.Message);
-                }
-            },
-            effectiveTimeout,
-            Locator.ExpectBackoffMs,
-            lastActual => new InvalidOperationException(
-                $"Expect('{_locator.Description}') {(_isNot ? "not " : string.Empty)}{expectedDescription} failed after {effectiveTimeout.TotalMilliseconds}ms. Actual: {lastActual}"));
     }
 }
