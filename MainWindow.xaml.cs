@@ -28,13 +28,13 @@ public partial class MainWindow : Window
         if (_count > 0)
         {
             _count--;
-            CounterLabel.Content = _count.ToString();
+            Count.Content = _count.ToString();
         }
     }
 
     private void OnPlusClick(object sender, RoutedEventArgs e)
     {
         _count++;
-        CounterLabel.Content = _count.ToString();
+        Count.Content = _count.ToString();
     }
 }
