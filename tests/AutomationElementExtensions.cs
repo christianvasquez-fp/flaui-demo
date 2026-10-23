@@ -30,21 +30,21 @@ public enum WaitForState
 }
 
 /// <summary>
-/// Playwright-style locators, auto-waiting actions, and assertions for FlaUI <see cref="AutomationElement"/>.
+/// Playwright-style locators, auto-waiting actions, and state queries for FlaUI <see cref="AutomationElement"/>.
 /// Drop this single file into any test project; it shares the <c>FlaUI.Core.AutomationElements</c> namespace.
 /// </summary>
 public static class AutomationElementExtensions
 {
     /// <summary>
     /// Creates a lazy locator that finds a descendant by its <c>AutomationId</c> (e.g. WPF <c>x:Name</c>).
-    /// Does not query the UI until an action or assertion is called.
+    /// Does not query the UI until an action or state query is called.
     /// </summary>
     public static Locator FindElement(this AutomationElement root, string automationId) =>
-        new(root, cf => cf.ByAutomationId(automationId), $"AutomationId='{automationId}'");
+        Locator.ByAutomationId(() => root, automationId);
 
     /// <summary>
     /// Creates a lazy locator that finds a descendant matching a custom FlaUI condition.
-    /// Does not query the UI until an action or assertion is called.
+    /// Does not query the UI until an action or state query is called.
     /// </summary>
     public static Locator FindElement(this AutomationElement root, Func<ConditionFactory, ConditionBase> condition, string description = "custom condition") =>
         new(root, condition, description);
@@ -59,18 +59,13 @@ public static class AutomationElementExtensions
     /// Creates a lazy locator that finds a descendant by its visible text (<c>Name</c> property).
     /// </summary>
     public static Locator GetByText(this AutomationElement root, string text) =>
-        new(root, cf => cf.ByName(text), $"Text='{text}'");
+        Locator.ByText(() => root, text);
 
     /// <summary>
     /// Creates a lazy locator that finds a descendant by its UIA <see cref="ControlType"/> (e.g. <c>ControlType.Button</c>) and optional accessible name.
     /// </summary>
     public static Locator GetByRole(this AutomationElement root, ControlType role, string? name = null) =>
-        new(
-            root,
-            cf => name is null
-                ? cf.ByControlType(role)
-                : cf.ByControlType(role).And(cf.ByName(name)),
-            name is null ? $"Role={role}" : $"Role={role}, Name='{name}'");
+        Locator.ByRole(() => root, role, name);
 }
 
 /// <summary>
@@ -104,24 +99,22 @@ public sealed class Locator
         _description = description;
     }
 
-    internal string Description => _description;
-
     /// <summary>
     /// Resolves and returns the underlying FlaUI <see cref="AutomationElement"/>, waiting up to <see cref="DefaultTimeout"/> for it to be attached.
     /// </summary>
-    public AutomationElement Element => ResolveAttached(DefaultTimeout);
+    public AutomationElement Element => ResolveAttached(null);
 
     /// <summary>
     /// Chains a child locator that finds a descendant by its <c>AutomationId</c> inside this locator.
     /// </summary>
     public Locator FindElement(string automationId) =>
-        new(TryResolve, cf => cf.ByAutomationId(automationId), $"{_description} >> AutomationId='{automationId}'");
+        ByAutomationId(TryResolve, automationId, _description);
 
     /// <summary>
     /// Chains a child locator that finds a descendant matching a custom FlaUI condition inside this locator.
     /// </summary>
     public Locator FindElement(Func<ConditionFactory, ConditionBase> condition, string description = "custom condition") =>
-        new(TryResolve, condition, $"{_description} >> {description}");
+        new(TryResolve, condition, ChainDescription(_description, description));
 
     /// <summary>
     /// Chains a child locator that finds a descendant by its <c>AutomationId</c> inside this locator.
@@ -132,26 +125,38 @@ public sealed class Locator
     /// Chains a child locator that finds a descendant by its visible text (<c>Name</c> property) inside this locator.
     /// </summary>
     public Locator GetByText(string text) =>
-        new(TryResolve, cf => cf.ByName(text), $"{_description} >> Text='{text}'");
+        ByText(TryResolve, text, _description);
 
     /// <summary>
     /// Chains a child locator that finds a descendant by its <see cref="ControlType"/> and optional name inside this locator.
     /// </summary>
     public Locator GetByRole(ControlType role, string? name = null) =>
+        ByRole(TryResolve, role, name, _description);
+
+    internal static Locator ByAutomationId(Func<AutomationElement?> rootResolver, string automationId, string? parentDescription = null) =>
+        new(rootResolver, cf => cf.ByAutomationId(automationId), ChainDescription(parentDescription, $"AutomationId='{automationId}'"));
+
+    internal static Locator ByText(Func<AutomationElement?> rootResolver, string text, string? parentDescription = null) =>
+        new(rootResolver, cf => cf.ByName(text), ChainDescription(parentDescription, $"Text='{text}'"));
+
+    internal static Locator ByRole(Func<AutomationElement?> rootResolver, ControlType role, string? name, string? parentDescription = null) =>
         new(
-            TryResolve,
+            rootResolver,
             cf => name is null
                 ? cf.ByControlType(role)
                 : cf.ByControlType(role).And(cf.ByName(name)),
-            name is null ? $"{_description} >> Role={role}" : $"{_description} >> Role={role}, Name='{name}'");
+            ChainDescription(parentDescription, name is null ? $"Role={role}" : $"Role={role}, Name='{name}'"));
+
+    private static string ChainDescription(string? parentDescription, string description) =>
+        parentDescription is null ? description : $"{parentDescription} >> {description}";
 
     /// <summary>
     /// Waits until the element reaches the specified <paramref name="state"/> (defaults to <see cref="WaitForState.Visible"/>).
     /// </summary>
     public Locator WaitFor(WaitForState state = WaitForState.Visible, TimeSpan? timeout = null)
     {
-        var effectiveTimeout = timeout ?? DefaultTimeout;
-        PollWithBackoff<bool>(
+        Poll(
+            timeout,
             () =>
             {
                 var element = TryResolve();
@@ -172,10 +177,7 @@ public sealed class Locator
                     _ => throw new ArgumentOutOfRangeException(nameof(state), state, null)
                 };
             },
-            effectiveTimeout,
-            ActionBackoffMs,
-            reason => new TimeoutException(
-                $"WaitFor({state}) timed out after {effectiveTimeout.TotalMilliseconds}ms for '{_description}': {reason}"));
+            $"WaitFor({state})");
 
         return this;
     }
@@ -186,12 +188,7 @@ public sealed class Locator
     /// </summary>
     public void Click(bool forceMouse = false, TimeSpan? timeout = null)
     {
-        var element = ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: true,
-            requireEnabled: true,
-            requireEditable: false);
+        var element = ResolveActionable(timeout);
 
         if (!forceMouse)
         {
@@ -221,35 +218,20 @@ public sealed class Locator
     /// Waits for the element to be visible, stable, and enabled, then double-clicks it with the mouse.
     /// </summary>
     public void DoubleClick(TimeSpan? timeout = null) =>
-        ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: true,
-            requireEnabled: true,
-            requireEditable: false).DoubleClick();
+        ResolveActionable(timeout).DoubleClick();
 
     /// <summary>
     /// Waits for the element to be visible, stable, and enabled, then right-clicks it with the mouse.
     /// </summary>
     public void RightClick(TimeSpan? timeout = null) =>
-        ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: true,
-            requireEnabled: true,
-            requireEditable: false).RightClick();
+        ResolveActionable(timeout).RightClick();
 
     /// <summary>
     /// Waits for the input element to be visible, enabled, and editable, then sets its text value.
     /// </summary>
     public void Fill(string value, TimeSpan? timeout = null)
     {
-        var element = ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: false,
-            requireEnabled: true,
-            requireEditable: true);
+        var element = ResolveActionable(timeout, requireStable: false, requireEditable: true);
 
         if (element.Patterns.Value.IsSupported)
         {
@@ -270,14 +252,7 @@ public sealed class Locator
     /// </summary>
     public void Press(VirtualKeyShort key, TimeSpan? timeout = null)
     {
-        var element = ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: false,
-            requireEnabled: true,
-            requireEditable: false);
-
-        element.Focus();
+        ResolveActionable(timeout, requireStable: false).Focus();
         Keyboard.Type(key);
     }
 
@@ -286,22 +261,28 @@ public sealed class Locator
     /// </summary>
     public void Type(string text, TimeSpan? timeout = null)
     {
-        var element = ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: false,
-            requireEnabled: true,
-            requireEditable: false);
-
-        element.Focus();
+        ResolveActionable(timeout, requireStable: false).Focus();
         Keyboard.Type(text);
     }
 
     /// <summary>
     /// Waits for the element to be attached and returns its text (<c>Value</c>, <c>Text</c> pattern, or <c>Name</c>).
     /// </summary>
-    public string TextContent(TimeSpan? timeout = null) =>
-        ReadTextContent(ResolveAttached(timeout ?? DefaultTimeout));
+    public string TextContent(TimeSpan? timeout = null)
+    {
+        var element = ResolveAttached(timeout);
+        if (element.Patterns.Value.IsSupported)
+        {
+            return element.Patterns.Value.Pattern.Value.Value ?? string.Empty;
+        }
+
+        if (element.Patterns.Text.IsSupported)
+        {
+            return element.Patterns.Text.Pattern.DocumentRange.GetText(-1).TrimEnd('\r', '\n');
+        }
+
+        return element.Properties.Name.ValueOrDefault ?? string.Empty;
+    }
 
     /// <summary>
     /// Waits for the element to be attached and returns its text (alias for <see cref="TextContent"/>).
@@ -311,20 +292,36 @@ public sealed class Locator
     /// <summary>
     /// Waits for the input element to be attached and returns its current value.
     /// </summary>
-    public string InputValue(TimeSpan? timeout = null) =>
-        ReadInputValue(ResolveAttached(timeout ?? DefaultTimeout));
+    public string InputValue(TimeSpan? timeout = null)
+    {
+        var element = ResolveAttached(timeout);
+        return element.Patterns.Value.IsSupported
+            ? element.Patterns.Value.Pattern.Value.Value ?? string.Empty
+            : element.AsTextBox().Text ?? string.Empty;
+    }
 
     /// <summary>
     /// Waits for the checkbox or radio button to be visible, stable, and enabled, then checks it.
     /// </summary>
     public void Check(TimeSpan? timeout = null)
     {
-        var element = ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: true,
-            requireEnabled: true,
-            requireEditable: false);
+        var element = ResolveActionable(timeout);
+
+        if (element.Patterns.SelectionItem.IsSupported)
+        {
+            element.Patterns.SelectionItem.Pattern.Select();
+            return;
+        }
+
+        if (element.Patterns.Toggle.IsSupported)
+        {
+            if (element.Patterns.Toggle.Pattern.ToggleState.Value != ToggleState.On)
+            {
+                element.Patterns.Toggle.Pattern.Toggle();
+            }
+
+            return;
+        }
 
         if (element.Properties.ControlType.ValueOrDefault == ControlType.RadioButton)
         {
@@ -344,12 +341,17 @@ public sealed class Locator
     /// </summary>
     public void Uncheck(TimeSpan? timeout = null)
     {
-        var element = ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: true,
-            requireEnabled: true,
-            requireEditable: false);
+        var element = ResolveActionable(timeout);
+
+        if (element.Patterns.Toggle.IsSupported)
+        {
+            if (element.Patterns.Toggle.Pattern.ToggleState.Value != ToggleState.Off)
+            {
+                element.Patterns.Toggle.Pattern.Toggle();
+            }
+
+            return;
+        }
 
         var checkBox = element.AsCheckBox();
         if (checkBox.IsChecked != false)
@@ -361,32 +363,14 @@ public sealed class Locator
     /// <summary>
     /// Waits for the combo box to be visible, stable, and enabled, then selects an item by its text.
     /// </summary>
-    public void SelectOption(string textOrValue, TimeSpan? timeout = null)
-    {
-        var element = ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: true,
-            requireEnabled: true,
-            requireEditable: false);
-
-        element.AsComboBox().Select(textOrValue);
-    }
+    public void SelectOption(string textOrValue, TimeSpan? timeout = null) =>
+        ResolveActionable(timeout).AsComboBox().Select(textOrValue);
 
     /// <summary>
     /// Waits for the combo box to be visible, stable, and enabled, then selects an item by its zero-based index.
     /// </summary>
-    public void SelectOption(int index, TimeSpan? timeout = null)
-    {
-        var element = ResolveActionable(
-            timeout ?? DefaultTimeout,
-            requireVisible: true,
-            requireStable: true,
-            requireEnabled: true,
-            requireEditable: false);
-
-        element.AsComboBox().Select(index);
-    }
+    public void SelectOption(int index, TimeSpan? timeout = null) =>
+        ResolveActionable(timeout).AsComboBox().Select(index);
 
     /// <summary>
     /// Returns <c>true</c> immediately if the element is currently attached and visible (does not wait).
@@ -402,15 +386,28 @@ public sealed class Locator
     /// Waits for the element to be attached and returns whether it is enabled.
     /// </summary>
     public bool IsEnabled(TimeSpan? timeout = null) =>
-        ResolveAttached(timeout ?? DefaultTimeout).Properties.IsEnabled.ValueOrDefault;
+        ResolveAttached(timeout).Properties.IsEnabled.ValueOrDefault;
 
     /// <summary>
     /// Waits for the checkbox or radio button to be attached and returns whether it is checked.
     /// </summary>
-    public bool IsChecked(TimeSpan? timeout = null) =>
-        ReadIsChecked(ResolveAttached(timeout ?? DefaultTimeout), _description);
+    public bool IsChecked(TimeSpan? timeout = null)
+    {
+        var element = ResolveAttached(timeout);
+        if (element.Patterns.Toggle.IsSupported)
+        {
+            return element.Patterns.Toggle.Pattern.ToggleState.Value == ToggleState.On;
+        }
 
-    internal AutomationElement? TryResolve()
+        if (element.Patterns.SelectionItem.IsSupported)
+        {
+            return element.Patterns.SelectionItem.Pattern.IsSelected.Value;
+        }
+
+        throw new InvalidOperationException($"Element does not support Toggle or SelectionItem pattern: {_description}");
+    }
+
+    private AutomationElement? TryResolve()
     {
         try
         {
@@ -422,8 +419,12 @@ public sealed class Locator
         }
     }
 
-    internal static bool IsElementVisible(AutomationElement? element)
+    private static bool IsElementVisible(AutomationElement? element) =>
+        TryGetVisibleBounds(element, out _);
+
+    private static bool TryGetVisibleBounds(AutomationElement? element, out Rectangle bounds)
     {
+        bounds = default;
         if (element is null)
         {
             return false;
@@ -431,17 +432,10 @@ public sealed class Locator
 
         try
         {
-            if (element.Properties.IsOffscreen.ValueOrDefault)
-            {
-                return false;
-            }
-
-            if (element.Properties.BoundingRectangle.TryGetValue(out var rect))
-            {
-                return rect.Width > 0 && rect.Height > 0;
-            }
-
-            return true;
+            return !element.Properties.IsOffscreen.ValueOrDefault
+                && element.Properties.BoundingRectangle.TryGetValue(out bounds)
+                && bounds.Width > 0
+                && bounds.Height > 0;
         }
         catch
         {
@@ -449,48 +443,9 @@ public sealed class Locator
         }
     }
 
-    internal static string ReadTextContent(AutomationElement element)
-    {
-        if (element.Patterns.Value.IsSupported)
-        {
-            return element.Patterns.Value.Pattern.Value.Value ?? string.Empty;
-        }
-
-        if (element.Patterns.Text.IsSupported)
-        {
-            return element.Patterns.Text.Pattern.DocumentRange.GetText(-1).TrimEnd('\r', '\n');
-        }
-
-        return element.Properties.Name.ValueOrDefault ?? string.Empty;
-    }
-
-    internal static string ReadInputValue(AutomationElement element)
-    {
-        if (element.Patterns.Value.IsSupported)
-        {
-            return element.Patterns.Value.Pattern.Value.Value ?? string.Empty;
-        }
-
-        return element.AsTextBox().Text ?? string.Empty;
-    }
-
-    internal static bool ReadIsChecked(AutomationElement element, string description)
-    {
-        if (element.Patterns.Toggle.IsSupported)
-        {
-            return element.Patterns.Toggle.Pattern.ToggleState.Value == ToggleState.On;
-        }
-
-        if (element.Patterns.SelectionItem.IsSupported)
-        {
-            return element.Patterns.SelectionItem.Pattern.IsSelected.Value;
-        }
-
-        throw new InvalidOperationException($"Element does not support Toggle or SelectionItem pattern: {description}");
-    }
-
-    private AutomationElement ResolveAttached(TimeSpan timeout) =>
-        PollWithBackoff<AutomationElement>(
+    private AutomationElement ResolveAttached(TimeSpan? timeout) =>
+        Poll<AutomationElement>(
+            timeout,
             () =>
             {
                 var element = TryResolve();
@@ -498,55 +453,41 @@ public sealed class Locator
                     ? (true, element, null)
                     : (false, null, "element not found");
             },
-            timeout,
-            ActionBackoffMs,
-            reason => new TimeoutException(
-                $"Timed out after {timeout.TotalMilliseconds}ms waiting for '{_description}': {reason}"))!;
+            "Waiting")!;
 
     private AutomationElement ResolveActionable(
-        TimeSpan timeout,
-        bool requireVisible,
-        bool requireStable,
-        bool requireEnabled,
-        bool requireEditable)
+        TimeSpan? timeout,
+        bool requireStable = true,
+        bool requireEditable = false)
     {
         Rectangle? previousBounds = null;
-        var hasPreviousBounds = false;
 
-        return PollWithBackoff<AutomationElement>(
+        return Poll<AutomationElement>(
+            timeout,
             () =>
             {
                 var element = TryResolve();
                 if (element is null)
                 {
-                    hasPreviousBounds = false;
+                    previousBounds = null;
                     return (false, null, "element is not attached");
                 }
 
                 try
                 {
-                    if (requireVisible && !IsElementVisible(element))
+                    if (!TryGetVisibleBounds(element, out var bounds))
                     {
-                        hasPreviousBounds = false;
+                        previousBounds = null;
                         return (false, null, "element is not visible");
                     }
 
-                    if (requireStable && element.Properties.BoundingRectangle.TryGetValue(out var bounds))
+                    if (requireStable && previousBounds != bounds)
                     {
-                        if (!hasPreviousBounds || previousBounds != bounds)
-                        {
-                            previousBounds = bounds;
-                            hasPreviousBounds = true;
-                            Thread.Sleep(20);
-                            if (element.Properties.BoundingRectangle.TryGetValue(out var currentBounds) && currentBounds != bounds)
-                            {
-                                previousBounds = currentBounds;
-                                return (false, null, "element is not stable");
-                            }
-                        }
+                        previousBounds = bounds;
+                        return (false, null, "element is not stable");
                     }
 
-                    if (requireEnabled && !element.Properties.IsEnabled.ValueOrDefault)
+                    if (!element.Properties.IsEnabled.ValueOrDefault)
                     {
                         return (false, null, "element is not enabled");
                     }
@@ -562,22 +503,19 @@ public sealed class Locator
                 }
                 catch (Exception ex)
                 {
-                    hasPreviousBounds = false;
+                    previousBounds = null;
                     return (false, null, ex.Message);
                 }
             },
-            timeout,
-            ActionBackoffMs,
-            reason => new TimeoutException(
-                $"Action timed out after {timeout.TotalMilliseconds}ms on '{_description}': {reason}"))!;
+            "Action")!;
     }
 
-    internal static T? PollWithBackoff<T>(
+    private T? Poll<T>(
+        TimeSpan? timeout,
         Func<(bool Done, T? Value, string? LastFailure)> step,
-        TimeSpan timeout,
-        ReadOnlySpan<int> backoffMs,
-        Func<string?, Exception> onTimeout)
+        string operation)
     {
+        var effectiveTimeout = timeout ?? DefaultTimeout;
         var stopwatch = Stopwatch.StartNew();
         var attempt = 0;
 
@@ -589,13 +527,14 @@ public sealed class Locator
                 return value;
             }
 
-            var remaining = timeout - stopwatch.Elapsed;
+            var remaining = effectiveTimeout - stopwatch.Elapsed;
             if (remaining <= TimeSpan.Zero)
             {
-                throw onTimeout(lastFailure);
+                throw new TimeoutException(
+                    $"{operation} timed out after {effectiveTimeout.TotalMilliseconds}ms on '{_description}': {lastFailure}");
             }
 
-            var delayMs = backoffMs[Math.Min(attempt, backoffMs.Length - 1)];
+            var delayMs = ActionBackoffMs[Math.Min(attempt, ActionBackoffMs.Length - 1)];
             attempt++;
 
             var sleepTime = TimeSpan.FromMilliseconds(delayMs);
