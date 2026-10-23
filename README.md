@@ -53,7 +53,7 @@ Raw UI Automation tests are often flaky or verbose because elements render async
      - **Visible**: not offscreen and has a non-zero bounding box.
      - **Stable**: bounding rectangle is unchanged across consecutive checks (`Click`, `Check`, `SelectOption`).
      - **Enabled & Editable**: `IsEnabled` (and not `IsReadOnly` for `Fill`/`Clear`).
-   - **State Queries** (`IsVisible`, `IsHidden`) return immediately (`0ms` wait), while `Text()` / `TextContent()`, `InputValue()`, `IsEnabled()`, and `IsChecked()` wait for attachment and read once, pairing cleanly with `NUnit.StaticExpect` (`Expect(window.GetByTestId("Count").Text(), EqualTo("1"))`).
+   - **State Queries** (`IsVisible`, `IsHidden`) return immediately (`0ms` wait), while `Text()` / `TextContent()`, `InputValue()`, `IsEnabled()`, and `IsChecked()` wait for attachment and read once, pairing cleanly with `NExpect` (`Expect(window.GetByTestId("Count").Text()).To.Equal("1")`).
 
 4. **Pattern-First Interaction with Mouse/Control Fallbacks**
    - `Click()` prefers UIA patterns (`Invoke`, `Toggle`, `SelectionItem`) for fast, deterministic execution even when another window is in the foreground, falling back to physical mouse clicks (`forceMouse: true` or when no pattern applies).

@@ -2,7 +2,8 @@ using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.UIA3;
 using NUnit.Framework;
-using static NUnit.StaticExpect.Expectations;
+using NExpect;
+using static NExpect.Expectations;
 
 namespace flaui_demo.Tests;
 
@@ -32,7 +33,7 @@ public class CounterTests
     {
         window.GetByTestId("Increment").Click();
 
-        Expect(window.GetByTestId("Count").Text(), EqualTo("1"));
+        Expect(window.GetByTestId("Count").Text()).To.Equal("1");
     }
 
     [Test]
@@ -40,6 +41,6 @@ public class CounterTests
     {
         window.GetByTestId("Decrement").Click();
 
-        Expect(window.GetByTestId("Count").Text(), EqualTo("0"));
+        Expect(window.GetByTestId("Count").Text()).To.Equal("0");
     }
 }
